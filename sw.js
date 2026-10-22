@@ -1,5 +1,5 @@
 // เปลี่ยนเลขเวอร์ชันทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือดึงของใหม่
-const CACHE = 'ngernpaimai-v3';
+const CACHE = 'ngernpaimai-v4';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 const CDN = ['https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js'];
 

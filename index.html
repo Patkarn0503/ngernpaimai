@@ -342,7 +342,7 @@ details.sec[open]>summary::after{transform:rotate(45deg)}
 const VER='1.0.0';
 const TABLES=['transactions','categories','accounts','templates','recurring'];
 const NUMK=new Set(['amount','budget','opening_balance','sort_order','every','is_fixed','archived','active','updated_at','deleted']);
-const DEF={autoSave:true,sortUsage:true,be:true,theme:'auto',defAcc:'a_cash',autoSync:true,syncUrl:'',syncToken:'',cursor:0,lastSync:0,seeded:false,deviceId:''};
+const DEF={autoSave:true,sortUsage:true,be:true,theme:'auto',defAcc:'a_cash',slipDefAcc:'',autoSync:true,syncUrl:'',syncToken:'',cursor:0,lastSync:0,seeded:false,deviceId:''};
 const TM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const TMF=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const TD=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
@@ -1054,7 +1054,8 @@ function renderSettings(){
  const tog=(k,l,hint='')=>`<div class="tog"><span>${l}${hint?`<br><small class="muted">${hint}</small>`:''}</span><label class="sw"><input type="checkbox" data-pref="${k}" ${M[k]?'checked':''}><span></span></label></div>`;
  v.innerHTML=
  sec('rec','การบันทึก',tog('autoSave','แตะหมวดแล้วบันทึกทันที','ใส่ยอดก่อน แล้วแตะหมวด = บันทึก')+tog('sortUsage','เรียงหมวดตามการใช้งาน','หมวดที่ใช้บ่อยใน 90 วันล่าสุดอยู่ซ้ายสุด')+tog('be','แสดงปีเป็น พ.ศ.')+
-  `<div class="tog"><span>กระเป๋าเริ่มต้น</span><select class="mini" data-pref="defAcc">${accList().map(a=>`<option value="${a.id}" ${a.id===M.defAcc?'selected':''}>${esc(a.icon+' '+a.name)}</option>`).join('')}</select></div>
+  `<div class="tog"><span>กระเป๋าเริ่มต้น<br><small class="muted">ตอนบันทึกเอง</small></span><select class="mini" data-pref="defAcc">${accList().map(a=>`<option value="${a.id}" ${a.id===M.defAcc?'selected':''}>${esc(a.icon+' '+a.name)}</option>`).join('')}</select></div>
+  <div class="tog"><span>กระเป๋าเริ่มต้น<br><small class="muted">ตอนนำเข้าสลิป</small></span><select class="mini" data-pref="slipDefAcc">${accList().map(a=>`<option value="${a.id}" ${a.id===slipAcc()?'selected':''}>${esc(a.icon+' '+a.name)}</option>`).join('')}</select></div>
   <div class="tog"><span>ธีม</span><select class="mini" data-pref="theme">${[['auto','ตามระบบ'],['light','สว่าง'],['dark','มืด']].map(([k,l])=>`<option value="${k}" ${M.theme===k?'selected':''}>${l}</option>`).join('')}</select></div>`)+
  sec('cat','หมวดหมู่',`<div class="small muted" style="margin:4px 0">รายจ่าย</div>${catLine('expense')}<div class="btns"><button class="btn" data-new="cat:expense">＋ หมวดรายจ่าย</button></div><div class="small muted" style="margin:14px 0 4px">รายรับ</div>${catLine('income')}<div class="btns"><button class="btn" data-new="cat:income">＋ หมวดรายรับ</button></div>`)+
  sec('acc','กระเป๋าเงิน',lst('accounts',a=>`<span class="e">${esc(a.icon)}</span><button class="grow" style="text-align:left" data-ed="acc:${a.id}"><b>${esc(a.name)}</b><small class="num">คงเหลือ ${fmt(bal[a.id]||0)}${+a.archived?' · ซ่อนอยู่':''}</small></button>`)+`<div class="btns"><button class="btn" data-new="acc">＋ กระเป๋า</button></div>`)+
@@ -1307,10 +1308,12 @@ async function slipImage(file){
  return {canvas:c,qr};
 }
 // เดาหมวดจากผู้รับที่เคยบันทึก
+// กระเป๋าเริ่มต้นของสลิป: ค่าที่ตั้งไว้ → a_bank → กระเป๋าแรกที่ไม่ใช่เงินสดเริ่มต้น
+function slipAcc(){if(get('accounts',M.slipDefAcc))return M.slipDefAcc;if(get('accounts','a_bank'))return 'a_bank';const l=accList();return (l.find(a=>a.id!==M.defAcc)||l[0]||{}).id}
 function guessCat(payee,type){let b=null;for(const t of S.transactions)if(!t.deleted&&t.type===type&&payee&&t.note===payee&&(!b||t.ts>b.ts))b=t;return b&&get('categories',b.category_id)?b.category_id:''}
 function slipDup(it){const all=live('transactions');if(it.ref&&all.some(t=>t.ref===it.ref))return 'บันทึกแล้ว';if(it.amount&&it.ts&&all.some(t=>t.ts===it.ts&&+t.amount===+it.amount))return 'อาจซ้ำ';return ''}
 async function importSlips(files){
- const items=files.map(f=>({file:f,url:URL.createObjectURL(f),st:'wait',sel:true,type:'expense',amount:'',ts:'',note:'',cat:'',acc:'',ref:'',fee:0,source:'',dup:''}));
+ const items=files.map(f=>({file:f,url:URL.createObjectURL(f),st:'wait',sel:true,type:'expense',amount:'',ts:'',note:'',cat:'',acc:slipAcc(),ref:'',fee:0,source:'',dup:''}));
  const box=el(`<div><div class="slipbar" id="slipBar">เตรียมตัวอ่านสลิป…</div><div id="slipList"></div></div>`),list=$('#slipList',box);
  const saveB=btn('บันทึก','pri',()=>commitSlips(items));
  const upd=()=>{const ok=items.filter(i=>i.sel&&i.st==='ok');saveB.textContent=`บันทึก ${ok.length} รายการ`;saveB.disabled=!ok.length||items.some(i=>i.st==='wait'||i.st==='ocr')};
@@ -1338,7 +1341,7 @@ async function importSlips(files){
   try{
    const img=await slipImage(it.file),{data}=await w.recognize(img.canvas),r=parseSlip(data.text,img.qr);
    Object.assign(it,{type:r.kind,amount:r.amount?String(Math.round((r.amount+(r.fee||0))*100)/100):'',fee:r.fee,ts:r.ts||nowTs(),note:r.payee,ref:r.ref,source:r.source,st:'ok'});
-   it.cat=guessCat(it.note,it.type);it.acc=get('accounts',(M.slipAcc||{})[it.source])?M.slipAcc[it.source]:A.account||M.defAcc;
+   it.cat=guessCat(it.note,it.type);it.acc=slipAcc();
    it.dup=slipDup(it);if(it.dup)it.sel=false;
    if(!r.amount){it.dup=(it.dup?it.dup+' · ':'')+'ไม่พบยอด'}
   }catch(e){it.st='err';it.err=e.message||String(e)}
@@ -1349,8 +1352,7 @@ async function importSlips(files){
 async function commitSlips(items){
  const ok=items.filter(i=>i.sel&&i.st==='ok');
  for(const it of ok){if(!(+it.amount>0))return toast('มีรายการที่ยอดเงินว่าง');if(!get('categories',it.cat))return toast('มีรายการที่ยังไม่ได้เลือกหมวด');if(!it.ts)return toast('มีรายการที่ไม่มีวันเวลา')}
- M.slipAcc=M.slipAcc||{};
- for(const it of ok){await save('transactions',{id:uid('t'),type:it.type,amount:+it.amount,category_id:it.cat,account_id:it.acc,to_account_id:'',tags:'',note:it.note.trim(),ts:it.ts.slice(0,16),recurring_id:'',ref:it.ref},{silent:true});if(it.source)M.slipAcc[it.source]=it.acc}
+ for(const it of ok){await save('transactions',{id:uid('t'),type:it.type,amount:+it.amount,category_id:it.cat,account_id:it.acc,to_account_id:'',tags:'',note:it.note.trim(),ts:it.ts.slice(0,16),recurring_id:'',ref:it.ref},{silent:true})}
  await saveMeta();items.forEach(i=>URL.revokeObjectURL(i.url));closeSheet();scheduleSync();refresh();toast(`บันทึกจากสลิป ${ok.length} รายการ`);
 }
 // รับสลิปที่แชร์มาจากแอปอื่น (Android)
