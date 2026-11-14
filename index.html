@@ -1306,9 +1306,9 @@ function parseSlip(text,qr){
  const L=t.split(/\n/).map(x=>x.trim()).filter(Boolean);
  const r={amount:null,fee:0,ts:'',payee:'',ref:'',bank:'',kind:'expense',source:''};
  // ยอดเงิน: ให้ "ที่ชำระ" ก่อน แล้วค่อย "จำนวนเงิน"
- const am=t.match(/จ[ำา]?นวนเงินที่ช[ำา]ระ\s*([\d,]+(?:\.\d{1,2})?)/)||t.match(/จ[ำา]?นวน(?:เงิน)?\s*([\d,]+(?:[.]\d{1,2})?)\s*(?:บาท|THB|฿)/i)||t.match(/(?:amount|ยอดเงิน|ยอดชำระ)\s*:?\s*([\d,]+(?:\.\d{1,2})?)/i);
+ const am=t.match(/จ[ำา]?นวนเงินที่ช[ำา]ระ\s*([\d,]+(?:\.\d{1,2})?)/)||t.match(/จ[ำา]?นวน(?:เงิน)?\s*([\d,]+(?:[.]\d{1,2})?)\s*(?:บาท|THB|฿)/i)||t.match(/จ[ำา]?นวน(?:เงิน)?\s*([\d,]+\.\d{2})\b/)||t.match(/(?:amount|ยอดเงิน|ยอดชำระ)\s*:?\s*([\d,]+(?:\.\d{1,2})?)/i);
  if(am)r.amount=slipNum(am[1]);
- else{const all=[...t.matchAll(/^(?!.*ธรรมเนียม).*?([\d,]+\.\d{2})\s*(?:บาท|THB)/gm)].map(m=>slipNum(m[1]));if(all.length)r.amount=Math.max(...all)}
+ else{const all=[...t.matchAll(/^(?!.*ธรรมเนียม)(?!.*X{2,}).*?\b(\d{1,3}(?:,\d{3})*\.\d{2})\b/gm)].map(m=>slipNum(m[1]));if(all.length)r.amount=Math.max(...all)}
  const fe=t.match(/ค่าธรรมเนียม\s*([\d,]+(?:\.\d{1,2})?)/);if(fe)r.fee=slipNum(fe[1])||0;
  // วันเวลา: 22 ต.ค. 2569 - 08:28 / 22 ต.ค. 69, 08:28 น. / 22 Oct 2026 08:28
  const dm=t.match(/(\d{1,2})\s+([ก-๙a-z]{1,3}\.?\s?[ก-๙a-z]?\.?)\s*(\d{4}|\d{2})\s*[-,]?\s*(\d{1,2})[:.](\d{2})/i);
@@ -1317,9 +1317,10 @@ function parseSlip(text,qr){
  // ผู้รับ
  const clean=s=>s.replace(/^[^ก-๙A-Za-z0-9(]+/,'').replace(/^(?:\S{1,2}\s{2,})+/,'').replace(/\s{2,}.*$/,'').trim();
  const skip=/^(พร้อมเพย์|PromptPay|XXX|xxx|x{3}|\(?\d[\d\s-]{6,}\)?$|รหัส|หมายเลข|เลขที่|จำนวน|ค่าธรรมเนียม|วันที่|ธนาคาร|กรุงไทย$|กสิกร|ไทยพาณิชย์)/;
- let i=L.findIndex(x=>/ไปยัง|^ถึง\b|^To\b/i.test(x));
+ let i=L.findIndex(x=>/ไ[ปบ]\S{0,2}ย\S{0,2}ง|^ถึง\b|^To\b/i.test(x));
+ if(i<0){const k=L.findIndex(x=>/X{2,}[-\s]?X*/.test(x));if(k>=0&&L.slice(k+1).some(x=>/X{2,}/.test(x)))i=k}
  if(i>=0){
-  const same=clean(L[i].split(/ไปยัง|ถึง|To/i).pop()||'');let p=same.length>2?same:'';let j=i+1;
+  const same=/X{2,}/.test(L[i])?'':clean(L[i].split(/ไ[ปบ]\S{0,2}ย\S{0,2}ง|ถึง|To/i).pop()||'');let p=same.length>2?same:'';let j=i+1;
   while(!p&&j<L.length&&j<i+3){const c=clean(L[j]);if(c.length>1&&!skip.test(c))p=c;j++}
   if(p&&(p.match(/\(/g)||[]).length>(p.match(/\)/g)||[]).length&&L[j])p+=' '+clean(L[j]);
   r.payee=p;
@@ -1331,7 +1332,7 @@ function parseSlip(text,qr){
  // อ้างอิง + แหล่งที่มา
  const q=slipQR(qr);
  if(q){r.ref=q.ref;r.bank=q.bank;r.source=q.bank}
- else{const rf=t.match(/(?:รหัสอ้างอิง|เลขที่รายการ|Ref(?:erence)?\.?(?:\s*No\.?)?)\s*:?\s*\(?([A-Za-z0-9]{8,})/i);if(rf)r.ref='ocr:'+rf[1]}
+ else{const rf=t.match(/(?:รหัส\S{0,8}|เลขที่รายการ|Ref(?:erence)?\.?(?:\s*No\.?)?)\s*:?\s*\(?([A-Za-z0-9]{8,})/i);if(rf)r.ref='ocr:'+rf[1]}
  if(!r.source)r.source=/G-?Wallet|เป๋าตัง|ไทยช่วยไทย/i.test(t)?'gwallet':/TrueMoney|ทรูมันนี่/i.test(t)?'truemoney':'other';
  if(/รับเงิน|เงินเข้า/.test(t)&&!/โอนเงิน|จ่าย/.test(t))r.kind='income';
  return r;
