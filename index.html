@@ -346,7 +346,7 @@ const VER='1.0.0';
 const TABLES=['transactions','categories','accounts','templates','recurring','books','inbox'];
 const DEF_BOOK='b_me';
 const NUMK=new Set(['amount','budget','opening_balance','sort_order','every','is_fixed','archived','active','variable','size','updated_at','deleted']);
-const DEF={autoSave:true,sortUsage:true,be:true,theme:'auto',defAcc:'a_cash',slipDefAcc:'',book:'',myBook:'',autoSync:true,syncUrl:'',syncToken:'',cursor:0,lastSync:0,seeded:false,deviceId:''};
+const DEF={autoSave:true,sortUsage:true,be:true,theme:'auto',defAcc:'a_cash',slipDefAcc:'',anomMin:300,book:'',myBook:'',autoSync:true,syncUrl:'',syncToken:'',cursor:0,lastSync:0,seeded:false,deviceId:''};
 const TM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const TMF=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const TD=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
@@ -686,9 +686,9 @@ function renderAdd(){
  // ชิปข้อมูลเสริม
  const acc=accOf(A.account),to=accOf(A.to);
  const when=A.when?`${ICO.clock} ${A.when.slice(11)}`:`${ICO.clock} ตอนนี้`;
- const note=A.note||A.tags?`${ICO.pen} ${esc([A.note,showTags(A.tags)].filter(Boolean).join(' '))}`:`${ICO.pen} โน้ต/แท็ก`;
+ const note=A.note?`${ICO.pen} ${esc(A.note)}`:`${ICO.pen} โน้ต`;
  $('#metaChips').innerHTML=(A.type==='transfer'?`<button class="chip" data-m="acc">จาก ${esc(acc?acc.icon+' '+acc.name:'?')} ${ICO.down}</button>`:`<button class="chip" data-m="acc">${esc(acc?acc.icon+' '+acc.name:'เลือกกระเป๋า')} ${ICO.down}</button>`)+
-  `<button class="chip ${A.when?'set':''}" data-m="when">${when}</button><button class="chip ${A.note||A.tags?'set':''}" data-m="note">${note}</button>`;
+  `<button class="chip ${A.when?'set':''}" data-m="when">${when}</button><button class="chip ${A.note?'set':''}" data-m="note">${note}</button>`;
  renderSheet();
  // หมวด / ปลายทางโอน
  // แถวหมวดเดียว เลื่อนซ้ายขวา เรียงตามความถี่
@@ -741,12 +741,10 @@ function pickWhen(){
  $('.btns',box).append(btn('ตอนนี้','',()=>set(null)),btn('เมื่อวาน','',()=>set(`${addDays(today(),-1)} ${hm}`)),btn('2 วันก่อน','',()=>set(`${addDays(today(),-2)} ${hm}`)));
  openSheet('วันเวลา',box,[btn('ตกลง','pri',()=>set(inp.value?inp.value.replace('T',' ').slice(0,16):null))]);
 }
-function topTags(n=10){const c={};live('transactions').forEach(t=>t.tags&&t.tags.split(',').forEach(x=>c[x]=(c[x]||0)+1));return Object.keys(c).sort((a,b)=>c[b]-c[a]).slice(0,n)}
 function pickNote(){
- const box=el(`<div><div class="fld"><label>โน้ต</label><input class="f" id="nNote"></div><div class="fld"><label>แท็ก (คั่นด้วยเว้นวรรคหรือ ,)</label><input class="f" id="nTags" placeholder="เช่น ทริปเชียงใหม่ งาน"></div><div class="chips" style="flex-wrap:wrap">${topTags().map(t=>`<button class="chip" data-t="${esc(t)}">#${esc(t)}</button>`).join('')}</div></div>`);
- $('#nNote',box).value=A.note;$('#nTags',box).value=showTags(A.tags);
- box.onclick=e=>{const b=e.target.closest('[data-t]');if(b){const i=$('#nTags',box);i.value=showTags(normTags(i.value+' '+b.dataset.t))}};
- openSheet('โน้ตและแท็ก',box,[btn('ล้าง','',()=>{A.note='';A.tags='';closeSheet();renderAdd()}),btn('ตกลง','pri',()=>{A.note=$('#nNote',box).value.trim();A.tags=normTags($('#nTags',box).value);closeSheet();renderAdd()})]);
+ const box=el(`<div><div class="fld"><label>โน้ต</label><input class="f" id="nNote"></div></div>`);
+ $('#nNote',box).value=A.note;
+ openSheet('โน้ต',box,[btn('ล้าง','',()=>{A.note='';closeSheet();renderAdd()}),btn('ตกลง','pri',()=>{A.note=$('#nNote',box).value.trim();closeSheet();renderAdd()})]);
 }
 function bindAdd(){
  $('#addType').onclick=e=>{const b=e.target.closest('button');if(!b)return;A.type=b.dataset.v;A.cat=null;A.to=null;A.step='amt';renderAdd()};
@@ -794,7 +792,7 @@ const LS={month:ym(today()),q:'',type:'all',cat:'',acc:''};
 function txTitle(t){if(t.type==='transfer')return `โอน ${(accOf(t.account_id)||{}).name||'?'} → ${(accOf(t.to_account_id)||{}).name||'?'}`;const c=catOf(t.category_id);return c?c.name:'(ไม่มีหมวด)'}
 function txIcon(t){if(t.type==='transfer')return '⇄';const c=catOf(t.category_id);return c?c.icon:'•'}
 function txRow(t){
- const a=accOf(t.account_id),sub=[t.note,showTags(t.tags),a?a.icon+' '+a.name:'',t.ts.slice(11),].filter(Boolean).join(' · '),marks=(t.recurring_id?ICO.rep:'')+(t.ref?ICO.slip:'');
+ const a=accOf(t.account_id),sub=[t.note,a?a.icon+' '+a.name:'',t.ts.slice(11),].filter(Boolean).join(' · '),marks=(t.recurring_id?ICO.rep:'')+(t.ref?ICO.slip:'');
  const amt=t.type==='expense'?`−${fmt(t.amount)}`:t.type==='income'?`+${fmt(t.amount)}`:fmt(t.amount);
  return `<button class="tx" data-id="${t.id}"><span class="ic">${esc(txIcon(t))}</span><span class="mid grow"><b>${esc(txTitle(t))}</b><small>${esc(sub)} ${marks}</small></span><span class="amt num ${t.type==='income'?'pos':t.type==='transfer'?'tr':''}">${amt}</span></button>`;
 }
@@ -803,7 +801,7 @@ function renderList(){
  const cats=live('categories').sort((a,b)=>a.type.localeCompare(b.type)||bySort(a,b));
  v.innerHTML=`<div class="mnav"><button data-mv="-1"><svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><b id="lMonth"></b><button data-mv="1"><svg class="ico" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>
  <div class="sumrow" id="lSum"></div>
- <input class="f" id="lQ" type="search" placeholder="ค้นหา โน้ต แท็ก หมวด จำนวนเงิน (ทุกเดือน)">
+ <input class="f" id="lQ" type="search" placeholder="ค้นหา โน้ต หมวด จำนวนเงิน (ทุกเดือน)">
  <div class="filters">
   <select class="mini" id="lType"><option value="all">ทุกประเภท</option><option value="expense">รายจ่าย</option><option value="income">รายรับ</option><option value="transfer">โอน</option></select>
   <select class="mini" id="lCat"><option value="">ทุกหมวด</option>${cats.map(c=>`<option value="${c.id}">${esc(c.icon+' '+c.name)}</option>`).join('')}</select>
@@ -842,7 +840,7 @@ function editTx(t){
   {k:'account_id',label:'กระเป๋า',type:'select',options:accOpts('',bk(t))},
   {k:'to_account_id',label:'โอนไปยัง',type:'select',options:accOpts('',bk(t)),show:v=>v.type==='transfer'},
   {k:'ts',label:'วันเวลา',type:'datetime'},
-  {k:'note',label:'โน้ต'},{k:'tags',label:'แท็ก'}],
+  {k:'note',label:'โน้ต'}],
   onSave:async v=>{
    if(!(+v.amount>0))return 'จำนวนเงินต้องมากกว่า 0';
    if(v.type==='transfer'&&v.to_account_id===v.account_id)return 'กระเป๋าต้นทางและปลายทางต้องต่างกัน';
@@ -942,8 +940,7 @@ function renderStats(){
  <div class="card"><h3>เฉลี่ยรายจ่ายต่อวันตามวันในสัปดาห์</h3><div id="chDow" class="ch"></div></div>
  <div class="card"><h3>การกระจายขนาดรายการ</h3><div id="chHist" class="ch"></div><div class="tscroll" id="tbDesc"></div></div>
  <div class="card"><h3>Box plot ตามหมวด <small>สเกล log · จุด = outlier</small></h3><div id="chBox" class="ch"></div></div>
- <div class="card"><h3>ความผิดปกติ <small>robust z-score (median/MAD)</small></h3><div id="anom"></div></div>
- <div class="card"><h3>แท็ก</h3><div class="tscroll" id="tbTag"></div></div>
+ <div class="card"><h3>ความผิดปกติ <small>robust z-score (median/MAD) · ตั้งแต่ ${fmt(+M.anomMin)} บาท</small></h3><div id="anom"></div></div>
  <div class="card"><h3>ยอดคงเหลือกระเป๋า <small>ทั้งหมด ไม่ขึ้นกับช่วงเวลา</small></h3><div class="tscroll" id="tbAcc"></div></div>`;
  v.innerHTML=html;bindStats(v);
  const C1=css('--s1'),C2=css('--s2'),C3=css('--s3');
@@ -1028,10 +1025,6 @@ function renderStats(){
  // ความผิดปกติ
  $('#anom').innerHTML=anomalies(exp,R,bm)||'<div class="empty small">ไม่พบรายการที่ผิดปกติ</div>';
 
- // แท็ก
- const tg={};exp.forEach(t=>t.tags&&t.tags.split(',').forEach(x=>{tg[x]=tg[x]||[0,0];tg[x][0]+= +t.amount;tg[x][1]++}));
- const tk=Object.keys(tg).sort((a,b)=>tg[b][0]-tg[a][0]);
- $('#tbTag').innerHTML=tk.length?`<table class="t num"><tr><th>แท็ก</th><th>ยอดจ่าย</th><th>ครั้ง</th><th>% ของจ่าย</th></tr>${tk.map(k=>`<tr><td>#${esc(k)}</td><td>${fmt(tg[k][0])}</td><td>${tg[k][1]}</td><td>${pct(tg[k][0],E).toFixed(1)}</td></tr>`).join('')}</table>`:'<div class="empty small">ไม่มีแท็กในช่วงนี้</div>';
 
  // กระเป๋า
  const bal=balances();
@@ -1080,12 +1073,12 @@ function anomalies(exp,R,bm){
  const out=[];
  const hist={};vtx().forEach(t=>{if(t.type==='expense'&&t.ts.slice(0,10)<=R.toE&&!t.recurring_id)(hist[t.category_id]=hist[t.category_id]||[]).push(+t.amount)});
  const st={};for(const k in hist){const s=hist[k].sort((a,b)=>a-b);if(s.length<8)continue;const med=quantile(s,.5),mad=quantile(s.map(x=>Math.abs(x-med)).sort((a,b)=>a-b),.5);st[k]={med,mad}}
- const items=exp.filter(t=>st[t.category_id]&&!t.recurring_id).map(t=>{const{med,mad}=st[t.category_id];const z=mad?0.6745*(t.amount-med)/mad:(t.amount>3*med?9:0);return {t,z,med}}).filter(x=>x.z>3.5).sort((a,b)=>b.z-a.z).slice(0,8);
+ const items=exp.filter(t=>st[t.category_id]&&!t.recurring_id).map(t=>{const{med,mad}=st[t.category_id];const z=mad?0.6745*(t.amount-med)/mad:(t.amount>3*med?9:0);return {t,z,med}}).filter(x=>x.z>3.5&&+x.t.amount>=+M.anomMin).sort((a,b)=>b.z-a.z).slice(0,8);
  items.forEach(({t,z,med})=>{const c=catOf(t.category_id);out.push(`<div class="anom">${ICO.alert} <b class="num">${fmt(t.amount)}</b> · ${esc(c?c.icon+' '+c.name:'')} · ${lbD(t.ts)}<br><span class="muted small">สูงกว่าค่ากลางของหมวด (${fmt(med)}) ${(t.amount/med).toFixed(1)} เท่า · z = ${z.toFixed(1)}${t.note?' · '+esc(t.note):''}</span></div>`)});
  // เทียบหมวดรายเดือนกับ 6 เดือนก่อน
  const mm={};vtx().forEach(t=>{if(t.type==='expense'){const k=t.category_id,m=ym(t.ts);mm[k]=mm[k]||{};mm[k][m]=(mm[k][m]||0)+ +t.amount}});
  for(const k in mm){const cur=mm[k][bm]||0;if(!cur)continue;const prev=[1,2,3,4,5,6].map(i=>mm[k][addMonths(bm,-i)]||0);if(prev.filter(Boolean).length<3)continue;
-  const mean=sum(prev)/6,sd=Math.sqrt(sum(prev.map(x=>(x-mean)**2))/5);if(!sd)continue;const z=(cur-mean)/sd;
+  const mean=sum(prev)/6,sd=Math.sqrt(sum(prev.map(x=>(x-mean)**2))/5);if(!sd||cur-mean<+M.anomMin)continue;const z=(cur-mean)/sd;
   if(z>2){const c=catOf(k);out.push(`<div class="anom">${ICO.up} ${esc(c?c.icon+' '+c.name:'')} ${lbM(bm)} สูงกว่าปกติ <b>${z.toFixed(1)}σ</b><br><span class="muted small">${fmt(cur)} vs เฉลี่ย 6 เดือนก่อน ${fmt(mean)} (SD ${fmt(sd)})</span></div>`)}}
  return out.join('');
 }
@@ -1101,6 +1094,7 @@ function renderSettings(){
  sec('rec','การบันทึก',tog('autoSave','แตะหมวดแล้วบันทึกทันที','ใส่ยอดก่อน แล้วแตะหมวด = บันทึก')+tog('sortUsage','เรียงหมวดตามการใช้งาน','หมวดที่ใช้บ่อยใน 90 วันล่าสุดอยู่ซ้ายสุด')+tog('be','แสดงปีเป็น พ.ศ.')+
   `<div class="tog"><span>กระเป๋าเริ่มต้น<br><small class="muted">ตอนบันทึกเอง</small></span><select class="mini" data-pref="defAcc">${accList().map(a=>`<option value="${a.id}" ${a.id===M.defAcc?'selected':''}>${esc(a.icon+' '+a.name)}</option>`).join('')}</select></div>
   <div class="tog"><span>กระเป๋าเริ่มต้น<br><small class="muted">ตอนนำเข้าสลิป</small></span><select class="mini" data-pref="slipDefAcc">${accList().map(a=>`<option value="${a.id}" ${a.id===slipAcc()?'selected':''}>${esc(a.icon+' '+a.name)}</option>`).join('')}</select></div>
+  <div class="tog"><span>ความผิดปกติ: แสดงตั้งแต่<br><small class="muted">ไม่แสดงรายการเล็กแม้ต่างจากปกติมาก</small></span><select class="mini" data-pref="anomMin">${[0,100,300,500,1000,2000].map(v=>`<option value="${v}" ${+M.anomMin===v?'selected':''}>${v?fmt(v)+' บาท':'ทุกยอด'}</option>`).join('')}</select></div>
   <div class="tog"><span>ธีม</span><select class="mini" data-pref="theme">${[['auto','ตามระบบ'],['light','สว่าง'],['dark','มืด']].map(([k,l])=>`<option value="${k}" ${M.theme===k?'selected':''}>${l}</option>`).join('')}</select></div>`)+
  sec('cat','หมวดหมู่',`<div class="small muted" style="margin:4px 0">รายจ่าย</div>${catLine('expense')}<div class="btns"><button class="btn" data-new="cat:expense">＋ หมวดรายจ่าย</button></div><div class="small muted" style="margin:14px 0 4px">รายรับ</div>${catLine('income')}<div class="btns"><button class="btn" data-new="cat:income">＋ หมวดรายรับ</button></div>`)+
  sec('book','สมุดบัญชี (แยกคน)',`<div class="small muted" style="margin-bottom:4px">ใช้ชีตเดียวกัน ทุกเครื่องที่ใส่ URL+Token เดียวกันเห็นทุกสมุด</div>`+lst('books',b=>`<span class="e">${esc(b.icon)}</span><button class="grow" style="text-align:left" data-ed="book:${b.id}"><b>${esc(b.name)}</b><small>${live('transactions').filter(t=>bk(t)===b.id).length.toLocaleString()} รายการ${b.id===myBook()?' · เครื่องนี้':''} · รหัส <span class="num" style="user-select:all">${b.id}</span></small></button>`)+`<div class="tog"><span>เครื่องนี้เป็นของ<br><small class="muted">เปิดแอปแล้วจดเข้าสมุดนี้</small></span><select class="mini" data-pref="myBook">${books().map(b=>`<option value="${b.id}" ${b.id===myBook()?'selected':''}>${esc(b.icon+' '+b.name)}</option>`).join('')}</select></div><div class="btns"><button class="btn" data-new="book">＋ สมุด</button></div>`)+
@@ -1199,7 +1193,7 @@ function editTemplate(t={}){
   {k:'category_id',label:'หมวด',type:'select',options:catSel,show:v=>v.type!=='transfer'},
   {k:'account_id',label:'กระเป๋า',type:'select',options:accOpts('(ตามที่เลือกบนหน้าบันทึก)',t.book_id||entryBook())},
   {k:'to_account_id',label:'โอนไปยัง',type:'select',options:accOpts('',t.book_id||entryBook()),show:v=>v.type==='transfer'},
-  {k:'note',label:'โน้ต'},{k:'tags',label:'แท็ก'}],
+  {k:'note',label:'โน้ต'}],
   onSave:async v=>{if(!v.name||!v.name.trim())return 'ใส่ชื่อปุ่ม';if(!(+v.amount>0))return 'จำนวนเงินต้องมากกว่า 0';
    if(v.type==='transfer'&&(!v.account_id||v.account_id===v.to_account_id))return 'เทมเพลตโอนต้องระบุกระเป๋าต้นทางและปลายทางที่ต่างกัน';
    await save('templates',{...t,book_id:t.book_id||entryBook(),id:t.id||uid('tp'),name:v.name.trim(),type:v.type,amount:+v.amount,category_id:v.type==='transfer'?'':v.category_id,account_id:v.account_id,to_account_id:v.type==='transfer'?v.to_account_id:'',note:v.note.trim(),tags:normTags(v.tags),sort_order:t.sort_order||nextSort('templates')})},
@@ -1221,7 +1215,7 @@ function editRecurring(r={}){
   {k:'time',label:'เวลาที่บันทึก',type:'time'},
   {k:'end_date',label:'วันสิ้นสุด (ไม่บังคับ)',type:'date'},
   {k:'active',label:'เปิดใช้งาน',type:'toggle'},
-  {k:'note',label:'โน้ต'},{k:'tags',label:'แท็ก'}],
+  {k:'note',label:'โน้ต'}],
   onSave:async v=>{if(!v.name||!v.name.trim())return 'ใส่ชื่อ';if(!+v.variable&&!(+v.amount>0))return 'จำนวนเงินต้องมากกว่า 0';if(!v.start_date)return 'ใส่วันเริ่ม';
    if(v.type==='transfer'&&v.account_id===v.to_account_id)return 'กระเป๋าต้นทางและปลายทางต้องต่างกัน';
    const restart=isNew||v.start_date!==r.start_date||v.freq!==r.freq||+v.every!==+r.every;
